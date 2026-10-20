@@ -1,0 +1,84 @@
+# 02-dns: DNSCluster finds the nodes
+# Captured 2026-10-20 from a real run. Reproduce with:
+#   demo/02-dns.sh
+
+=== start three nodes ===
+$ docker compose up -d
+ Network elixir-cluster-demo_cluster Creating 
+ Network elixir-cluster-demo_cluster Created 
+ Container elixir-cluster-demo-sfo1-1 Creating 
+ Container elixir-cluster-demo-tor1-1 Creating 
+ Container elixir-cluster-demo-fra1-1 Creating 
+ Container elixir-cluster-demo-tor1-1 Created 
+ Container elixir-cluster-demo-fra1-1 Created 
+ Container elixir-cluster-demo-sfo1-1 Created 
+ Container elixir-cluster-demo-sfo1-1 Starting 
+ Container elixir-cluster-demo-fra1-1 Starting 
+ Container elixir-cluster-demo-tor1-1 Starting 
+ Container elixir-cluster-demo-tor1-1 Started 
+ Container elixir-cluster-demo-sfo1-1 Started 
+ Container elixir-cluster-demo-fra1-1 Started 
+
+=== tor1 logs ===
+$ docker compose logs --no-color tor1
+tor1-1  | 15:39:59.645 [info] Configuration :server was not enabled for TicketingWeb.Endpoint, http/https services won't start
+tor1-1  | 15:39:59.745 [info] node ticketing@10.0.1.12 (fra1) joined
+tor1-1  | 15:39:59.770 [info] node ticketing@10.0.1.13 (sfo1) joined
+
+=== fra1 logs ===
+$ docker compose logs --no-color fra1
+fra1-1  | 15:39:59.741 [info] Configuration :server was not enabled for TicketingWeb.Endpoint, http/https services won't start
+fra1-1  | 15:39:59.743 [info] Reminders started under {:global, Ticketing.Reminders}
+fra1-1  | 15:39:59.745 [info] node ticketing@10.0.1.11 (tor1) joined
+fra1-1  | 15:39:59.770 [info] node ticketing@10.0.1.13 (sfo1) joined
+
+=== sfo1 logs ===
+$ docker compose logs --no-color sfo1
+sfo1-1  | 15:39:59.768 [info] Configuration :server was not enabled for TicketingWeb.Endpoint, http/https services won't start
+sfo1-1  | 15:39:59.770 [info] node ticketing@10.0.1.11 (tor1) joined
+sfo1-1  | 15:39:59.770 [info] node ticketing@10.0.1.12 (fra1) joined
+
+=== what DNS returns for 'ticketing' (inside tor1) ===
+$ docker compose exec tor1 getent ahostsv4 ticketing | awk '{print $1}' | sort -u
+10.0.1.11
+10.0.1.12
+10.0.1.13
+$ docker compose exec tor1 dig +short ticketing
+10.0.1.12
+10.0.1.11
+10.0.1.13
+
+=== add two more regions ===
+$ docker compose up -d lhr1 sin1
+ Container elixir-cluster-demo-lhr1-1 Creating 
+ Container elixir-cluster-demo-sin1-1 Creating 
+ Container elixir-cluster-demo-sin1-1 Created 
+ Container elixir-cluster-demo-lhr1-1 Created 
+ Container elixir-cluster-demo-lhr1-1 Starting 
+ Container elixir-cluster-demo-sin1-1 Starting 
+ Container elixir-cluster-demo-lhr1-1 Started 
+ Container elixir-cluster-demo-sin1-1 Started 
+
+=== tor1 logs after lhr1 and sin1 start ===
+$ docker compose logs --no-color --since 2026-10-20T15:40:01Z tor1
+tor1-1  | 15:40:03.481 [info] node ticketing@10.0.1.15 (sin1) joined
+tor1-1  | 15:40:03.553 [info] node ticketing@10.0.1.14 (lhr1) joined
+
+=== lhr1 logs after lhr1 and sin1 start ===
+$ docker compose logs --no-color --since 2026-10-20T15:40:01Z lhr1
+lhr1-1  | 15:40:03.550 [info] Configuration :server was not enabled for TicketingWeb.Endpoint, http/https services won't start
+lhr1-1  | 15:40:03.553 [info] node ticketing@10.0.1.12 (fra1) joined
+lhr1-1  | 15:40:03.553 [info] node ticketing@10.0.1.11 (tor1) joined
+lhr1-1  | 15:40:03.553 [info] node ticketing@10.0.1.13 (sfo1) joined
+lhr1-1  | 15:40:03.553 [info] node ticketing@10.0.1.15 (sin1) joined
+
+=== docker compose exec tor1 bin/ticketing remote ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+tor1> Node.list()
+[:"ticketing@10.0.1.12", :"ticketing@10.0.1.13", :"ticketing@10.0.1.15",
+ :"ticketing@10.0.1.14"]
+tor1> length(Node.list())
+4
+

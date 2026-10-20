@@ -1,0 +1,32 @@
+# 05-erpc: multicall, an owner per show, and the last seat
+# Captured 2026-10-20 from a real run. Reproduce with:
+#   demo/05-erpc.sh
+#   Show 26 is owned by sfo1 (ticketing@10.0.1.13) with all five nodes up.
+#   The two holds run at (nearly) the same moment; which side wins varies run to run.
+#   Ticketing.Sales numbers are simulated (fixed per region).
+
+=== docker compose exec tor1 bin/ticketing remote ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+tor1> nodes = Enum.sort([node() | Node.list()])
+[:"ticketing@10.0.1.11", :"ticketing@10.0.1.12", :"ticketing@10.0.1.13",
+ :"ticketing@10.0.1.14", :"ticketing@10.0.1.15"]
+tor1> :erpc.multicall(nodes, Ticketing.Sales, :last_minute, [])
+[ok: 132, ok: 97, ok: 141, ok: 88, ok: 120]
+tor1> Ticketing.Shows.owner(26)
+:"ticketing@10.0.1.13"
+tor1> Ticketing.Shows.open(26, ["F12"])
+{:ok, [seats_left: 1]}
+tor1> Ticketing.Shows.hold(26, 1)
+{:error, :sold_out}
+
+=== docker compose exec lhr1 bin/ticketing remote ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+lhr1> Ticketing.Shows.owner(26)
+:"ticketing@10.0.1.13"
+lhr1> Ticketing.Shows.hold(26, 1)
+{:ok, [seat: "F12"]}
+

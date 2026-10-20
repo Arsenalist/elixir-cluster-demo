@@ -1,0 +1,62 @@
+#!/usr/bin/expect -f
+# Drives an interactive IEx session like a person would, and records exactly
+# what the terminal showed.
+#
+#   console.exp <raw-log> <input-file> <command...>
+#
+# Every line of <input-file> is typed at the prompt, waiting for the next
+# prompt before typing the following line. Lines starting with `#!` are
+# directives, not typed:
+#
+#   #!wait <file>    block until <file> exists (sync with other sessions)
+#   #!touch <file>   create <file>
+#   #!sleep <secs>   pause
+#   #!run <cmd>      run a shell command now and show it in the transcript as
+#                    if typed in another terminal (start time, epoch ms, goes
+#                    to <raw-log>.run-at)
+set timeout 60
+# log_user must stay on: with it off, log_file records nothing. Callers send
+# stdout to /dev/null.
+log_user 1
+set rawlog [lindex $argv 0]
+set inputs [lindex $argv 1]
+set cmd [lrange $argv 2 end]
+
+log_file -noappend $rawlog
+# A wide terminal, so long input lines don't wrap (IEx still pretty-prints
+# results at 80 columns).
+set stty_init "rows 50 columns 200"
+eval spawn -noecho $cmd
+
+# A prompt is "tor1> " (or the "   .. " continuation prompt of a multi-line
+# expression) at the very end of the output, on its own line.
+set prompt {(^|\n)[^\n\x1b]*(> |\.\. )$}
+
+expect -re $prompt
+
+set fh [open $inputs r]
+while {[gets $fh line] >= 0} {
+  if {[string match "#!wait *" $line]} {
+    set f [string range $line 7 end]
+    while {![file exists $f]} { after 100 }
+  } elseif {[string match "#!touch *" $line]} {
+    close [open [string range $line 8 end] w]
+  } elseif {[string match "#!sleep *" $line]} {
+    after [expr {int([string range $line 8 end] * 1000)}]
+  } elseif {[string match "#!run *" $line]} {
+    set c [string range $line 6 end]
+    # Remember when we started it (epoch ms), for timing measurements.
+    set at [open "$rawlog.run-at" w]; puts $at [clock milliseconds]; close $at
+    catch {exec sh -c "$c 2>&1"} out
+    send_log "\n@@RUN@@ \$ $c\n$out\n@@END@@\n"
+  } else {
+    send -- "$line\r"
+    # Let the line editor echo and redraw before looking for the next prompt.
+    after 200
+    expect -re $prompt
+  }
+}
+close $fh
+after 300
+close
+wait

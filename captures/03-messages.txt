@@ -1,0 +1,45 @@
+# 03-messages: send, call, and a node that isn't there
+# Captured 2026-10-20 from a real run. Reproduce with:
+#   demo/03-messages.sh
+
+=== docker compose exec tor1 bin/ticketing remote ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+tor1> fra1 = Ticketing.node(:fra1)
+:"ticketing@10.0.1.12"
+tor1> :erpc.call(fra1, Process, :whereis, [BoxOffice])
+#PID<41425.1276.0>
+tor1> send({BoxOffice, fra1}, {:hold, 2, self()})
+{:hold, 2, #PID<0.1353.0>}
+tor1> flush()
+{:held, 2, [seats_left: 48]}
+:ok
+tor1> GenServer.call({BoxOffice, fra1}, {:hold, 2})
+{:ok, %{held: 2, seats_left: 46}}
+
+# --- in another terminal ---
+$ docker compose kill fra1
+ Container elixir-cluster-demo-fra1-1 Killing
+ Container elixir-cluster-demo-fra1-1 Killed
+# ---------------------------
+
+tor1> Node.list()
+[:"ticketing@10.0.1.13", :"ticketing@10.0.1.15", :"ticketing@10.0.1.14"]
+tor1> GenServer.call({BoxOffice, fra1}, {:hold, 2})
+** (exit) exited in: GenServer.call({BoxOffice, :"ticketing@10.0.1.12"}, {:hold, 2}, 5000)
+    ** (EXIT) time out
+    (elixir 1.20.0) lib/gen_server.ex:1183: GenServer.call/3
+    iex:7: (file)
+tor1> GenServer.call({BoxOffice, fra1}, {:hold, 2}, 10_000)
+** (exit) exited in: GenServer.call({BoxOffice, :"ticketing@10.0.1.12"}, {:hold, 2}, 10000)
+    ** (EXIT) no connection to ticketing@10.0.1.12
+    (elixir 1.20.0) lib/gen_server.ex:1183: GenServer.call/3
+    iex:7: (file)
+tor1> try do
+        GenServer.call({BoxOffice, fra1}, {:hold, 2})
+      catch
+        :exit, _ -> {:error, :unavailable}
+      end
+{:error, :unavailable}
+

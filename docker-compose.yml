@@ -1,0 +1,62 @@
+# Five nodes of the same release on one private network.
+#
+#   docker compose up -d              # tor1, fra1, sfo1
+#   docker compose up -d lhr1 sin1    # add two more
+#
+# Every service has the network alias `ticketing`, so the DNS name `ticketing`
+# resolves to all of their IPs. That's the DNS_CLUSTER_QUERY DNSCluster polls.
+
+x-node: &node
+  image: elixir-cluster-demo/ticketing:latest
+  build: .
+  networks:
+    cluster: {}
+  environment: &env
+    DNS_CLUSTER_QUERY: ticketing
+    # Demo value. Use a long random secret in real life (see README).
+    RELEASE_COOKIE: box-office
+    # Phoenix refuses to boot in prod without one. Demo value; not a secret.
+    SECRET_KEY_BASE: demo-only-demo-only-demo-only-demo-only-demo-only-demo-only-demo-only
+    SINGLETON_START_DELAY_MS: "5000"
+
+services:
+  tor1:
+    <<: *node
+    hostname: tor1
+    environment: { <<: *env, REGION: tor1 }
+    networks: { cluster: { ipv4_address: 10.0.1.11, aliases: [ticketing] } }
+
+  fra1:
+    <<: *node
+    hostname: fra1
+    # fra1 claims the Reminders singleton straight away; the others wait 5s.
+    environment: { <<: *env, REGION: fra1, SINGLETON_START_DELAY_MS: "0" }
+    networks: { cluster: { ipv4_address: 10.0.1.12, aliases: [ticketing] } }
+
+  sfo1:
+    <<: *node
+    hostname: sfo1
+    environment: { <<: *env, REGION: sfo1 }
+    networks: { cluster: { ipv4_address: 10.0.1.13, aliases: [ticketing] } }
+
+  # Not started by a plain `docker compose up`. Name them to add them:
+  #   docker compose up -d lhr1 sin1
+  lhr1:
+    <<: *node
+    hostname: lhr1
+    profiles: [more]
+    environment: { <<: *env, REGION: lhr1 }
+    networks: { cluster: { ipv4_address: 10.0.1.14, aliases: [ticketing] } }
+
+  sin1:
+    <<: *node
+    hostname: sin1
+    profiles: [more]
+    environment: { <<: *env, REGION: sin1 }
+    networks: { cluster: { ipv4_address: 10.0.1.15, aliases: [ticketing] } }
+
+networks:
+  cluster:
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24

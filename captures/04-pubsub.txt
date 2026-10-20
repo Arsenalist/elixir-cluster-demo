@@ -1,0 +1,41 @@
+# 04-pubsub: one broadcast, every subscriber
+# Captured 2026-10-20 from a real run. Reproduce with:
+#   demo/04-pubsub.sh
+
+=== docker compose exec fra1 bin/ticketing remote (subscribe) ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+fra1> Phoenix.PubSub.subscribe(Ticketing.PubSub, "shows")
+:ok
+fra1> flush()
+{:sold_out, 42}
+:ok
+
+=== docker compose exec sfo1 bin/ticketing remote (subscribe) ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+sfo1> Phoenix.PubSub.subscribe(Ticketing.PubSub, "shows")
+:ok
+sfo1> flush()
+{:sold_out, 42}
+:ok
+
+=== docker compose exec lhr1 bin/ticketing remote (subscribe) ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+lhr1> Phoenix.PubSub.subscribe(Ticketing.PubSub, "shows")
+:ok
+lhr1> flush()
+{:sold_out, 42}
+:ok
+
+=== docker compose exec tor1 bin/ticketing remote (broadcast) ===
+Erlang/OTP 28 [erts-16.4.0.2] [source] [64-bit] [smp:18:18] [ds:18:18:10] [async-threads:1] [jit]
+
+Interactive Elixir (1.20.0) - press Ctrl+C to exit (type h() ENTER for help)
+tor1> Phoenix.PubSub.broadcast(Ticketing.PubSub, "shows", {:sold_out, 42})
+:ok
+
